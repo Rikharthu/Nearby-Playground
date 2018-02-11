@@ -9,7 +9,7 @@ import com.google.android.gms.nearby.connection.*
 import kotlinx.android.synthetic.main.activity_main.*
 import timber.log.Timber
 
-class MainActivity : AppCompatActivity() {
+abstract class MainActivity : AppCompatActivity() {
 
     companion object {
         const val USER_NICKNAME = "uber_user"
