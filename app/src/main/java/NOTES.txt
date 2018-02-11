@@ -1,0 +1,4 @@
+Note: After calling stopAdvertising(), the advertiser can still receive connection requests
+from discoverers that discovered while advertising was active. After calling stopDiscovery(),
+ the discoverer can still request connections to advertisers that were discovered; however,
+ the discoverer will not discover any new advertisers until it starts discovery again.
