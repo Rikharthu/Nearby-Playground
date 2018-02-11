@@ -7,6 +7,12 @@ class MyDiscoverer(client: ConnectionsClient) : NearbyConnectionManager(client) 
 
     private val endpointsMap = mutableMapOf<String, DiscoveredEndpointInfo>()
 
+    /**
+     * Listener for discovery process events
+     */
+    var discoveryListener: ((Boolean) -> Unit)? = null
+    var endpointsListener: ((List<DiscoveredEndpointInfo>) -> Unit)? = null
+
     init {
 
     }
@@ -54,7 +60,7 @@ class MyDiscoverer(client: ConnectionsClient) : NearbyConnectionManager(client) 
     }
 
     private fun onEndpointsChanged() {
-
+        endpointsListener?.invoke(endpointsMap.values.toList())
     }
 
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
