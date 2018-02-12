@@ -3,22 +3,26 @@ package com.example.nearbyplayground
 import com.google.android.gms.nearby.connection.*
 import timber.log.Timber
 
-class MyDiscoverer(client: ConnectionsClient) : NearbyConnectionManager(client) {
+class MyDiscoverer(client: ConnectionsClient,
+                   var discoveryListener: ((Boolean) -> Unit)? = null,
+                   var endpointsListener: ((List<DiscoveredEndpointInfo>) -> Unit)? = null)
+    : NearbyConnectionManager(client) {
 
     private val endpointsMap = mutableMapOf<String, DiscoveredEndpointInfo>()
 
     /**
      * Listener for discovery process events
      */
-    var discoveryListener: ((Boolean) -> Unit)? = null
-    var endpointsListener: ((List<DiscoveredEndpointInfo>) -> Unit)? = null
 
     init {
 
     }
 
     var isDiscovering: Boolean = false
-        private set
+        private set (value) {
+            field = value
+            discoveryListener?.invoke(field)
+        }
 
     fun startDiscovery() {
         if (isDiscovering) {
@@ -28,14 +32,14 @@ class MyDiscoverer(client: ConnectionsClient) : NearbyConnectionManager(client) 
 
         isDiscovering = true
         client.startDiscovery(
-                "my_discoverer",
+                SERVICE_ID,
                 endpointDiscoveryCallback,
                 DiscoveryOptions(Strategy.P2P_STAR))
                 .addOnSuccessListener {
                     isDiscovering = true
                 }.addOnFailureListener {
-                    isDiscovering = false
-                }
+            isDiscovering = false
+        }
     }
 
     fun stopDiscovering() {

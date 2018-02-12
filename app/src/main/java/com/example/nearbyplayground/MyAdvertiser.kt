@@ -4,10 +4,14 @@ import com.google.android.gms.nearby.connection.AdvertisingOptions
 import com.google.android.gms.nearby.connection.ConnectionsClient
 import timber.log.Timber
 
-class MyAdvertiser(client: ConnectionsClient) : NearbyConnectionManager(client) {
+class MyAdvertiser(client: ConnectionsClient,
+                   var advertiseListener: ((Boolean) -> Unit)? = null) : NearbyConnectionManager(client) {
 
     var isAdvertising: Boolean = false
-        private set
+        private set(value) {
+            field = value
+            advertiseListener?.invoke(field)
+        }
 
     init {
 
@@ -29,9 +33,9 @@ class MyAdvertiser(client: ConnectionsClient) : NearbyConnectionManager(client) 
                     Timber.d("Advertising started")
                     isAdvertising = true
                 }.addOnFailureListener {
-                    Timber.d(it, "Failed to start advertising")
-                    isAdvertising = false
-                }
+            Timber.d(it, "Failed to start advertising")
+            isAdvertising = false
+        }
     }
 
     fun stopAdvertising() {
