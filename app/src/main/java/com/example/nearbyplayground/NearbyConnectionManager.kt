@@ -13,7 +13,7 @@ abstract class NearbyConnectionManager(
     protected val lifecycleCallback: ConnectionLifecycleCallback
 
     var payloadListener: PayloadCallback? = null
-    private val internalPayloadListener: PayloadCallback
+    protected val internalPayloadListener: PayloadCallback
 
     companion object {
         const val SERVICE_ID = "com.example.nearbyplayground"
@@ -52,7 +52,7 @@ abstract class NearbyConnectionManager(
             }
 
             override fun onConnectionInitiated(endpointId: String, connectionInfo: ConnectionInfo) {
-                Timber.d("Connection initiated for endpoint $endpointId")
+                Timber.d("Connection initiated for endpointId $endpointId")
                 onNearbyConnectionInitiated(endpointId, connectionInfo)
             }
 

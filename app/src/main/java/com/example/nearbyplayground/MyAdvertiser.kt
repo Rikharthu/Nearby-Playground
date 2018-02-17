@@ -1,17 +1,20 @@
 package com.example.nearbyplayground
 
 import com.google.android.gms.nearby.connection.AdvertisingOptions
+import com.google.android.gms.nearby.connection.ConnectionInfo
+import com.google.android.gms.nearby.connection.ConnectionResolution
 import com.google.android.gms.nearby.connection.ConnectionsClient
 import timber.log.Timber
 
-class MyAdvertiser(client: ConnectionsClient,
-                   var advertiseListener: ((Boolean) -> Unit)? = null) : NearbyConnectionManager(client) {
+class MyAdvertiser(client: ConnectionsClient, val nickname: String = DEFAULT_NICKNAME)
+    : NearbyConnectionManager(client) {
+
+    companion object {
+        private const val DEFAULT_NICKNAME = "nearby_playground_advertiser"
+    }
 
     var isAdvertising: Boolean = false
-        private set(value) {
-            field = value
-            advertiseListener?.invoke(field)
-        }
+        private set
 
     init {
 
@@ -25,7 +28,7 @@ class MyAdvertiser(client: ConnectionsClient,
 
         isAdvertising = true
         client.startAdvertising(
-                "my_advertiser",
+                nickname,
                 SERVICE_ID,
                 lifecycleCallback,
                 AdvertisingOptions(STRATEGY))
@@ -33,9 +36,9 @@ class MyAdvertiser(client: ConnectionsClient,
                     Timber.d("Advertising started")
                     isAdvertising = true
                 }.addOnFailureListener {
-            Timber.d(it, "Failed to start advertising")
-            isAdvertising = false
-        }
+                    Timber.d(it, "Failed to start advertising")
+                    isAdvertising = false
+                }
     }
 
     fun stopAdvertising() {
@@ -45,5 +48,12 @@ class MyAdvertiser(client: ConnectionsClient,
         }
     }
 
+    override fun onNearbyConnectionInitiated(endpointId: String, connectionInfo: ConnectionInfo) {
+        Timber.d("Initiating connection with $endpointId")
+        client.acceptConnection(endpointId, internalPayloadListener)
+    }
 
+    override fun onNearbyConnected(endpointId: String, result: ConnectionResolution) {
+        Timber.d("Connected to $endpointId? ${result.status.isSuccess}")
+    }
 }
