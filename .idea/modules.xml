@@ -2,7 +2,8 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/NearbyPlayground.iml" filepath="$PROJECT_DIR$/NearbyPlayground.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/Nearby-Playground.iml" filepath="$PROJECT_DIR$/.idea/Nearby-Playground.iml" />
+      <module fileurl="file://D:\Workspace\Android\Nearby-Playground\NearbyPlayground.iml" filepath="D:\Workspace\Android\Nearby-Playground\NearbyPlayground.iml" />
       <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
     </modules>
   </component>

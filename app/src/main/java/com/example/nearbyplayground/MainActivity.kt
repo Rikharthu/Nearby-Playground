@@ -1,7 +1,11 @@
 package com.example.nearbyplayground
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.support.v4.app.ActivityCompat
+import android.support.v7.app.AlertDialog
 import android.support.v7.app.AppCompatActivity
 import android.widget.ArrayAdapter
 import android.widget.Toast
@@ -12,11 +16,20 @@ import com.google.android.gms.nearby.Nearby
 import kotlinx.android.synthetic.main.activity_main.*
 import timber.log.Timber
 
+
 class MainActivity : AppCompatActivity() {
 
     companion object {
         const val USER_NICKNAME = "uber_user"
         const val SERVICE_ID = "com.example.nearbyplayground"
+        /**
+         * Request ACCESS_COARSE_LOCATION permission while trying to advertise
+         */
+        const val REQUEST_PERMISSION_LOCATION_ADVERTISE = 1
+        /**
+         * Request ACCESS_COARSE_LOCATION permission while trying to discover
+         */
+        const val REQUEST_PERMISSION_LOCATION_DISCCOVER = 2
     }
 
     private var endpoints = listOf<NearbyEndpoint>()
@@ -56,14 +69,14 @@ class MainActivity : AppCompatActivity() {
         advertiseBtn.setOnClickListener {
             startAdvertising()
         }
+        stopAdvertisingBtn.setOnClickListener {
+            stopAdvertising()
+        }
         discoverBtn.setOnClickListener {
             startDiscovering()
         }
         stopDiscoveryBtn.setOnClickListener {
             stopDiscovering()
-        }
-        stopAdvertisingBtn.setOnClickListener {
-            stopAdvertising()
         }
 
         endpointsAdapter = ArrayAdapter(this, android.R.layout.simple_list_item_1)
@@ -96,6 +109,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startAdvertising() {
+        val hasLocationPermission = hasPermissions(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+        if (!hasLocationPermission) {
+            Timber.d("No Location permission")
+            ActivityCompat.requestPermissions(this@MainActivity,
+                    arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION),
+                    REQUEST_PERMISSION_LOCATION_ADVERTISE)
+            return
+        }
+
         Timber.d("Starting advertising")
         myAdvertiser.startAdvertising()
     }
@@ -106,13 +128,54 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startDiscovering() {
+        val hasLocationPermission = hasPermissions(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+        if (!hasLocationPermission) {
+            Timber.d("No Location permission")
+            if (ActivityCompat.shouldShowRequestPermissionRationale(this,
+                    Manifest.permission.ACCESS_COARSE_LOCATION)) {
+                val builder = AlertDialog.Builder(this)
+                builder.setPositiveButton("OK", { _, _ ->
+                    requestPermission(Manifest.permission.ACCESS_COARSE_LOCATION,
+                            REQUEST_PERMISSION_LOCATION_DISCCOVER)
+                })
+            } else {
+                requestPermission(Manifest.permission.ACCESS_COARSE_LOCATION,
+                        REQUEST_PERMISSION_LOCATION_DISCCOVER)
+            }
+            return
+        }
+
         Timber.d("Starting discovering")
         myDiscoverer.startDiscovery()
+    }
+
+    private fun requestPermission(permission: String, requestCode: Int) {
+        ActivityCompat.requestPermissions(this@MainActivity,
+                arrayOf(permission),
+                requestCode)
     }
 
     private fun stopDiscovering() {
         Timber.d("Stopping discovering")
         myDiscoverer.stopDiscovering()
+    }
 
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        when (requestCode) {
+            REQUEST_PERMISSION_LOCATION_ADVERTISE -> {
+                if ((grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
+                    startAdvertising()
+                } else {
+                    Toast.makeText(this, R.string.location_permission_failure, Toast.LENGTH_LONG).show()
+                }
+            }
+            REQUEST_PERMISSION_LOCATION_DISCCOVER -> {
+                if ((grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
+                    startDiscovering()
+                } else {
+                    Toast.makeText(this, R.string.location_permission_failure, Toast.LENGTH_LONG).show()
+                }
+            }
+        }
     }
 }
