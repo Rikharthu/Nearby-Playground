@@ -1,5 +1,6 @@
 package com.example.nearbyplayground
 
+import android.arch.lifecycle.MutableLiveData
 import com.example.nearbyplayground.models.NearbyConnection
 import com.example.nearbyplayground.models.NearbyConnectionState
 import com.example.nearbyplayground.models.NearbyEndpoint
@@ -15,60 +16,64 @@ class MyDiscoverer(client: ConnectionsClient, val nickname: String = DEFAULT_NIC
 
     private val discoveredEndpoints = mutableListOf<NearbyEndpoint>()
 
-    /**
-     * Listener for discovery process events
-     */
-    var discoveryListener: ((Boolean) -> Unit)? = null
-    var endpointsListener: ((List<NearbyEndpoint>) -> Unit)? = null
-    var connectionListener: ((NearbyConnection?) -> Unit)? = null
+    // LiveData
+    var discoveryLiveData = MutableLiveData<Boolean>()
+    var endpointsLiveData = MutableLiveData<List<NearbyEndpoint>>()
+    var connectionsLiveData = MutableLiveData<NearbyConnection>()
 
     init {
 
     }
 
-    var isDiscovering: Boolean = false
-        private set
-
     fun startDiscovery() {
-        if (isDiscovering) {
+        if (discoveryLiveData.value != null && discoveryLiveData.value!!) {
             Timber.d("Already discovering")
             return
         }
-
-        isDiscovering = true
+        Timber.d("Starting discovery")
+        discoveryLiveData.value = true
         client.startDiscovery(
                 SERVICE_ID,
                 endpointDiscoveryCallback,
                 DiscoveryOptions(Strategy.P2P_STAR))
                 .addOnSuccessListener {
                     Timber.d("Discovery successfully started")
-                    isDiscovering = true
+                    discoveryLiveData.value = true
                 }.addOnFailureListener {
                     Timber.e(it, "Could not start discovery")
-                    isDiscovering = false
+                    discoveryLiveData.value = false
                 }
     }
 
     fun stopDiscovering() {
-        if (isDiscovering) {
-            isDiscovering = false
+        if (discoveryLiveData.value != null && discoveryLiveData.value!!) {
+            Timber.d("Stopping discovering")
+            discoveryLiveData.value = false
             client.stopDiscovery()
+            clearEndpoints()
         }
     }
 
-    private var connection: NearbyConnection? = null
+    private fun clearEndpoints() {
+        discoveredEndpoints.clear()
+        onEndpointsChanged()
+    }
 
     fun connectToEndpoint(endpointId: String) {
-        // Refactor to use listeners instead of returning object
-        if (connection != null) {
-            Timber.d("Already connection to ${connection!!.endpointId}")
+        if (connectionsLiveData.value != null) {
+            Timber.d("Already connecting to ${connectionsLiveData.value!!.endpointId}")
+            return
+        }
+        val endpoint = discoveredEndpoints.find { it.id == endpointId }
+        if (endpoint == null) {
+            Timber.d("Not a valid endpoint ID")
             return
         }
 
         Timber.d("Trying to connect to $endpointId")
-        connection = NearbyConnection(endpointId, this)
-        connection!!.state = NearbyConnectionState.REQUESTING
-        connectionListener?.invoke(connection!!)
+        val connection = NearbyConnection(endpoint.id, this)
+        connection.state = NearbyConnectionState.REQUESTING
+        connectionsLiveData.value = connection
 
         client.requestConnection(
                 nickname,
@@ -86,9 +91,11 @@ class MyDiscoverer(client: ConnectionsClient, val nickname: String = DEFAULT_NIC
 
     private fun clearConnection() {
         // Notify listener and clear reference
-        connection?.state = NearbyConnectionState.NOT_CONNECTED
-        connectionListener?.invoke(null)
-        connection = null
+        val connection = connectionsLiveData.value
+        if (connection != null) {
+            connection.state = NearbyConnectionState.NOT_CONNECTED
+            connectionsLiveData.value = null
+        }
     }
 
     private fun onNearbyEndpointFound(endpointId: String, endpointInfo: DiscoveredEndpointInfo) {
@@ -102,7 +109,7 @@ class MyDiscoverer(client: ConnectionsClient, val nickname: String = DEFAULT_NIC
     }
 
     private fun onEndpointsChanged() {
-        endpointsListener?.invoke(discoveredEndpoints)
+        endpointsLiveData.value = discoveredEndpoints
     }
 
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
@@ -119,35 +126,58 @@ class MyDiscoverer(client: ConnectionsClient, val nickname: String = DEFAULT_NIC
     }
 
     override fun onNearbyConnectionInitiated(endpointId: String, connectionInfo: ConnectionInfo) {
-        super.onNearbyConnectionInitiated(endpointId, connectionInfo)
         Timber.d("Accepting connection to $endpointId")
-        connection!!.state = NearbyConnectionState.AUTHENTICATING
+        val connection = connectionsLiveData.value
 
-        // TODO add authentication
-        connection!!.state = NearbyConnectionState.AUTH_ACCEPTED
+        if (connection != null && connection.endpointId == endpointId) {
+            connection.state = NearbyConnectionState.AUTHENTICATING
+            // TODO add authentication
+            acceptConnection()
+        } else {
+            // We didn't request this connection, reject
+            rejectConnection(endpointId)
+        }
+    }
 
-        client.acceptConnection(endpointId, internalPayloadListener)
-                .addOnSuccessListener { Timber.d("Accepted connection") }
-                .addOnFailureListener {
-                    Timber.e(it, "Could not accept connection")
-                    connection!!.state = NearbyConnectionState.AUTHENTICATING
+    private fun acceptConnection() {
+        val connection = connectionsLiveData.value ?: return
+
+        connection.state = NearbyConnectionState.AUTH_ACCEPTED
+        acceptConnection(connection.endpointId)
+                .addOnSuccessListener {
+                    Timber.d("Accepted connection")
                 }
+                .addOnFailureListener {
+                    // revert state
+                    // TODO why?
+                    connection.state = NearbyConnectionState.AUTHENTICATING
+                }
+    }
+
+    private fun acceptConnection(endpointId: String) =
+            client.acceptConnection(endpointId, internalPayloadListener)
+
+
+    private fun rejectConnection(endpointId: String) {
+
     }
 
     override fun onNearbyConnected(endpointId: String, result: ConnectionResolution) {
         Timber.d("Connected to $endpointId? ${result.status.isSuccess}")
-        if (connection != null) {
+        val connection = connectionsLiveData.value
+        if (connection != null && connection.endpointId == endpointId) {
             stopDiscovering()
-            connection!!.state = NearbyConnectionState.CONNECTED
+            connection.state = NearbyConnectionState.CONNECTED
         } else {
-
+            disconnectFromEndpoint(endpointId)
         }
     }
 
     override fun onNearbyDisconnected(endpointId: String) {
-        if (connection != null && connection!!.endpointId == endpointId) {
+        Timber.d("Endpoint $endpointId disconnected")
+        val connection = connectionsLiveData.value
+        if (connection != null) {
             clearConnection()
-            startDiscovery() // TODO add listener for discovery state?
         }
     }
 
@@ -157,7 +187,8 @@ class MyDiscoverer(client: ConnectionsClient, val nickname: String = DEFAULT_NIC
 
     override fun onNearbyConnectionRejected(endpointId: String) {
         Timber.d("Nearby connection rejected for endpoint $endpointId")
-        if (connection != null && connection!!.endpointId == endpointId) {
+        val connection = connectionsLiveData.value
+        if (connection != null) {
             clearConnection()
         }
     }

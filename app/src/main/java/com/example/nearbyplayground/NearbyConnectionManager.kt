@@ -72,25 +72,30 @@ abstract class NearbyConnectionManager(
         }
     }
 
-    protected open fun onNearbyConnected(endpointId: String, result: ConnectionResolution) {
+    /**
+     * A callback indicating that Nearby connection has been established
+     */
+    protected abstract fun onNearbyConnected(endpointId: String, result: ConnectionResolution)
 
-    }
+    /**
+     * A callback indicating that Nearby connection has been lost
+     */
+    protected abstract fun onNearbyDisconnected(endpointId: String)
 
-    protected open fun onNearbyDisconnected(endpointId: String) {
+    /**
+     * A callback indicating that there is an incoming request to establish a connection
+     */
+    protected abstract fun onNearbyConnectionInitiated(endpointId: String, connectionInfo: ConnectionInfo)
 
-    }
+    /**
+     * A callback indicating that error occured during Nearby connection
+     */
+    protected abstract fun onNearbyConnectionError(endpointId: String, result: ConnectionResolution)
 
-    protected open fun onNearbyConnectionInitiated(endpointId: String, connectionInfo: ConnectionInfo) {
-
-    }
-
-    protected open fun onNearbyConnectionError(endpointId: String, result: ConnectionResolution) {
-
-    }
-
-    protected open fun onNearbyConnectionRejected(endpointId: String) {
-
-    }
+    /**
+     * A callback indicating that outgoing connection has been refused
+     */
+    protected abstract fun onNearbyConnectionRejected(endpointId: String)
 
     fun disconnectFromEndpoint(endpointId: String) {
         client.disconnectFromEndpoint(endpointId)

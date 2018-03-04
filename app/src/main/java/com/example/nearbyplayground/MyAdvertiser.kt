@@ -56,4 +56,16 @@ class MyAdvertiser(client: ConnectionsClient, val nickname: String = DEFAULT_NIC
     override fun onNearbyConnected(endpointId: String, result: ConnectionResolution) {
         Timber.d("Connected to $endpointId? ${result.status.isSuccess}")
     }
+
+    override fun onNearbyDisconnected(endpointId: String) {
+        // Do nothing
+    }
+
+    override fun onNearbyConnectionError(endpointId: String, result: ConnectionResolution) {
+        // Do nothing
+    }
+
+    override fun onNearbyConnectionRejected(endpointId: String) {
+        // Do nothing
+    }
 }

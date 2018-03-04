@@ -1,27 +1,24 @@
 package com.example.nearbyplayground
 
 import android.Manifest
+import android.arch.lifecycle.Observer
+import android.arch.lifecycle.ViewModelProviders
 import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import android.support.v4.app.ActivityCompat
+import android.support.v4.app.Fragment
 import android.support.v7.app.AlertDialog
 import android.support.v7.app.AppCompatActivity
-import android.widget.ArrayAdapter
 import android.widget.Toast
-import com.example.nearbyplayground.models.NearbyConnection
-import com.example.nearbyplayground.models.NearbyConnectionState
-import com.example.nearbyplayground.models.NearbyEndpoint
-import com.google.android.gms.nearby.Nearby
-import kotlinx.android.synthetic.main.activity_main.*
+import com.google.android.gms.nearby.connection.Payload
+import com.google.android.gms.nearby.connection.PayloadCallback
+import com.google.android.gms.nearby.connection.PayloadTransferUpdate
 import timber.log.Timber
 
 
 class MainActivity : AppCompatActivity() {
 
     companion object {
-        const val USER_NICKNAME = "uber_user"
-        const val SERVICE_ID = "com.example.nearbyplayground"
         /**
          * Request ACCESS_COARSE_LOCATION permission while trying to advertise
          */
@@ -30,82 +27,83 @@ class MainActivity : AppCompatActivity() {
          * Request ACCESS_COARSE_LOCATION permission while trying to discover
          */
         const val REQUEST_PERMISSION_LOCATION_DISCCOVER = 2
+
+        const val FRAGMENT_TAG_DISCOVERY = "discovery_fragment"
     }
 
-    private var endpoints = listOf<NearbyEndpoint>()
-    private lateinit var endpointsAdapter: ArrayAdapter<String>
-    private lateinit var myDiscoverer: MyDiscoverer
-    private lateinit var myAdvertiser: MyAdvertiser
+    private lateinit var discoveryViewModel: DiscoveryViewModel
 
-    private val connectionListener: (NearbyConnection?) -> Unit = {
-        Timber.d("Received new connection: $it")
-        if (it != null) {
-            connection = it
-            connection!!.stateListener = connectionStateListener
-            connectionStatusTv.text = "Received connection to ${it?.endpointId}"
-        } else {
-            Timber.d("Connection destroyed")
-        }
-    }
+    private var currentFragment: Fragment? = null
+    private var currentFragmentTag: String? = null
 
-    private val connectionStateListener: (NearbyConnectionState) -> Unit = {
-        Timber.d("Connection state for ${connection?.endpointId} changed to $it")
-        connectionStatusTv.text = "${connection!!.endpointId} : $it"
-    }
+    private var discoveryFragment: DiscoveryFragment? = null
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        val client = Nearby.getConnectionsClient(this)
-        myDiscoverer = MyDiscoverer(client)
-        myDiscoverer.endpointsListener = {
-            onEndpointsUpdated(it)
-        }
-        myDiscoverer.connectionListener = connectionListener
+        discoveryViewModel = ViewModelProviders.of(this).get(DiscoveryViewModel::class.java)
+        discoveryViewModel.navigationState.observe(this, Observer<Int> {
+            if (it != null) {
+                when (it) {
+                    DiscoveryViewModel.CONTROLLER_UI -> {
+                        Timber.d("Navigating to controller UI")
 
-        myAdvertiser = MyAdvertiser(client, Build.MODEL)
+                    }
+                    DiscoveryViewModel.DISCOVERY_UI -> {
+                        Timber.d("Navigating to discovery UI")
+                        showDiscoveryUI()
+                    }
+                }
+            }
+        })
+    }
 
-        advertiseBtn.setOnClickListener {
-            startAdvertising()
+    private fun showDiscoveryUI() {
+        if (discoveryFragment == null) {
+            discoveryFragment = DiscoveryFragment.newInstance()
         }
-        stopAdvertisingBtn.setOnClickListener {
-            stopAdvertising()
-        }
-        discoverBtn.setOnClickListener {
-            startDiscovering()
-        }
-        stopDiscoveryBtn.setOnClickListener {
-            stopDiscovering()
-        }
+        swapFragment(discoveryFragment!!, FRAGMENT_TAG_DISCOVERY)
+    }
 
-        endpointsAdapter = ArrayAdapter(this, android.R.layout.simple_list_item_1)
-        endpointsList.adapter = endpointsAdapter
-        endpointsList.setOnItemClickListener { _, _, position, _ ->
-            val endpoint = endpoints[position]
-            onEndpointSelected(endpoint)
+    private fun swapFragment(fragment: Fragment, tag: String) {
+        if (currentFragment != fragment) {
+            supportFragmentManager.beginTransaction()
+                    .replace(R.id.container, fragment, tag)
+                    .commit()
+            currentFragment = fragment
+            currentFragmentTag = tag
         }
     }
 
-    private fun onEndpointsUpdated(endpoints: List<NearbyEndpoint>) {
-        val stringBuilder = StringBuilder()
-        stringBuilder.append("Endpoints updated:\n")
-        for (endpoint in endpoints) {
-            stringBuilder.append("\t${endpoint.info.endpointName} with id ${endpoint.id}\n")
-        }
-        Timber.d(stringBuilder.toString())
+//    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+//        menuInflater.inflate(R.menu.discovery_screen_menu, menu)
+//        return true
+//    }
 
-        this.endpoints = endpoints
-        endpointsAdapter.clear()
-        endpointsAdapter.addAll(endpoints.map { it.info.endpointName })
+    private val payloadCallback: PayloadCallback = object : PayloadCallback() {
+        override fun onPayloadReceived(endpointId: String, payload: Payload) {
+            Timber.d("Received payload from $endpointId")
+            val data = String(payload.asBytes()!!)
+            Timber.d("Payload: $data")
+        }
+
+        override fun onPayloadTransferUpdate(endpointId: String, payloadUpdate: PayloadTransferUpdate) {
+
+        }
     }
 
-    private var connection: NearbyConnection? = null
+    override fun onStart() {
+        super.onStart()
+//        myDiscoverer.payloadListener = payloadCallback
+//        myAdvertiser.payloadListener = payloadCallback
+    }
 
-    private fun onEndpointSelected(endpoint: NearbyEndpoint) {
-        Toast.makeText(this, endpoint.id, Toast.LENGTH_SHORT).show()
-        // Start connection
-        myDiscoverer.connectToEndpoint(endpoint.id)
+    override fun onStop() {
+        super.onStop()
+//        myDiscoverer.payloadListener = null
+//        myAdvertiser.payloadListener = null
     }
 
     private fun startAdvertising() {
@@ -119,45 +117,39 @@ class MainActivity : AppCompatActivity() {
         }
 
         Timber.d("Starting advertising")
-        myAdvertiser.startAdvertising()
-    }
-
-    private fun stopAdvertising() {
-        Timber.d("Stopping advertising")
-        myAdvertiser.stopAdvertising()
+        //myAdvertiser.startAdvertising()
     }
 
     private fun startDiscovering() {
         val hasLocationPermission = hasPermissions(this, Manifest.permission.ACCESS_COARSE_LOCATION)
         if (!hasLocationPermission) {
             Timber.d("No Location permission")
-            if (ActivityCompat.shouldShowRequestPermissionRationale(this,
-                    Manifest.permission.ACCESS_COARSE_LOCATION)) {
-                val builder = AlertDialog.Builder(this)
-                builder.setPositiveButton("OK", { _, _ ->
-                    requestPermission(Manifest.permission.ACCESS_COARSE_LOCATION,
-                            REQUEST_PERMISSION_LOCATION_DISCCOVER)
-                })
-            } else {
-                requestPermission(Manifest.permission.ACCESS_COARSE_LOCATION,
-                        REQUEST_PERMISSION_LOCATION_DISCCOVER)
-            }
+            requestPermissions()
             return
         }
 
         Timber.d("Starting discovering")
-        myDiscoverer.startDiscovery()
+        //myDiscoverer.startDiscovery()
+    }
+
+    private fun requestPermissions() {
+        if (ActivityCompat.shouldShowRequestPermissionRationale(this,
+                        Manifest.permission.ACCESS_COARSE_LOCATION)) {
+            val builder = AlertDialog.Builder(this)
+            builder.setPositiveButton("OK", { _, _ ->
+                requestPermission(Manifest.permission.ACCESS_COARSE_LOCATION,
+                        REQUEST_PERMISSION_LOCATION_DISCCOVER)
+            })
+        } else {
+            requestPermission(Manifest.permission.ACCESS_COARSE_LOCATION,
+                    REQUEST_PERMISSION_LOCATION_DISCCOVER)
+        }
     }
 
     private fun requestPermission(permission: String, requestCode: Int) {
         ActivityCompat.requestPermissions(this@MainActivity,
                 arrayOf(permission),
                 requestCode)
-    }
-
-    private fun stopDiscovering() {
-        Timber.d("Stopping discovering")
-        myDiscoverer.stopDiscovering()
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {

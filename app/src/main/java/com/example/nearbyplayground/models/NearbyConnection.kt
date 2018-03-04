@@ -1,30 +1,24 @@
 package com.example.nearbyplayground.models
 
+import android.arch.lifecycle.MutableLiveData
 import com.example.nearbyplayground.NearbyConnectionManager
 
 class NearbyConnection(
         val endpointId: String,
-        private val connectionManager: NearbyConnectionManager,
-        stateListener: ((NearbyConnectionState) -> Unit)? = null
+        private val connectionManager: NearbyConnectionManager
 ) {
-    var stateListener: ((NearbyConnectionState) -> Unit)? = null
-        set(value) {
-            field = value
-            // When new listener is set immediately notify of current state value
-            field?.invoke(state)
-        }
 
+    val stateLiveData = MutableLiveData<NearbyConnectionState>()
     var state: NearbyConnectionState = NearbyConnectionState.UNKNOWN
         set(value) {
             if (field != value) {
                 field = value
-                stateListener?.invoke(state)
+                stateLiveData.value = field
             }
         }
 
     init {
         state = NearbyConnectionState.NOT_CONNECTED
-        this.stateListener = stateListener
     }
 
     fun isConnected() = state == NearbyConnectionState.CONNECTED
